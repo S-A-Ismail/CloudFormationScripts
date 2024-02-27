@@ -1,0 +1,139 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+Description: SecurityGroup creation template
+
+Conditions:
+  # Source Conditions
+  IsEC2: !Equals [ !Ref ResourceName , "EC2" ]
+  IsDB: !Equals [ !Ref ResourceName , "DB" ]
+
+Parameters:
+  SGName:
+    Type: String
+    Description: Enter name of the security group being created
+  VPC:
+    Description: The VPC to deploy to
+    Type: 'AWS::EC2::VPC::Id'
+    ConstraintDescription: Must be a valid VPC.
+  Environment:
+    Type: String
+    Description: Tag used for mentioning environment
+    AllowedValues:
+      - dev
+      - qa
+      - preprod
+      - prod
+    Default: dev
+  Region:
+    Type: String
+    Description: Tag value used for Region Name
+  AppName:
+    Type: String
+    Description: Tag value of Application Name
+  Owner:
+    Type: String
+    Description: Tag value of Application Owner
+  Department:
+    Type: String
+    Description: Tag value of Department  
+  SystemName:
+    Type: String
+    Description: Tag value of System Name
+    ResourceName:
+    Type: String
+    Description: Tag value for Resource Name
+    AllowedValues:
+      - EC2
+      - DB 
+
+Resources:
+  AppSecurityGroup:
+    Condition: IsEC2
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: 'Allow SSH, HTTP, and HTTPS access'
+      GroupName: !Ref SGName
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: <CIDR RANGE>
+          Description: 'ICMP TRAFFIC FROM CIDR RANGE TO PORT 443'
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: <CIDR RANGE>
+          Description: 'TCP TRAFFIC FROM CIDR RANGE TO PORT 443'
+        - IpProtocol: tcp
+          FromPort: '443'
+          ToPort: '443'
+          CidrIp: <CIDR RANGE 2>
+          Description: 'TCP TRAFFIC FROM CIDR RANGE 2 TO PORT 443'
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: <CIDR RANGE>
+          Description: 'SSH TRAFFIC FROM CIDR RANGE TO PORT 22'
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: <CIDR RANGE>
+          Description: 'WHITELIST ALL TRAFFIC FROM PROVIDED RANGE'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Department
+          Value: !Ref Department
+        - Key: SystemName
+          Value: !Ref SystemName
+
+DBSecurityGroup:
+    Condition: IsDB
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: 'Allow SSH, HTTP, and HTTPS access'
+      GroupName: !Join 
+        - '-'
+        - - cloud-sg-
+          - !Ref AppName
+          - !Ref Environment  
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: <CIDR RANGE>
+        - IpProtocol: tcp
+          FromPort: 587
+          ToPort: 587
+          CidrIp: <CIDR RANGE>
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 587
+          ToPort: 587
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Department
+          Value: !Ref Department
+        - Key: SystemName
+          Value: !Ref SystemName

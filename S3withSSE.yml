@@ -1,0 +1,96 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: This Template creates an S3 bucket with security, IAM and SSE Encryption policies defined.
+
+Parameters:
+  S3BucketName:
+    Type: String
+    Description: Enter name of the security group being created
+  AppName:
+    Type: String
+    Description: Tag value of Application Name
+  Owner:
+    Type: String
+    Description: Tag value of System Owner
+  Department:
+    Type: String
+    Description: Tag value of Department  
+  SystemName:
+    Type: String
+    Description: Tag value of System Name
+  Environment:
+    Type: String
+    Description: Tag used for mentioning environment
+    AllowedValues:
+      - dev
+      - qa
+      - preprod
+      - prod
+    Default: dev 
+
+Resources:
+    S3Policy:
+      Type: "AWS::S3::BucketPolicy"
+      Properties:
+        Bucket: !Ref zone0
+        PolicyDocument:
+          Statement:
+            -
+              Sid: MustBeEncryptedAtRest
+              Action:
+                - "s3:PutObject"
+              Effect: "Deny"
+              Resource:
+                - Fn::Join:
+                    - ""
+                    -
+                      - "arn:aws:s3:::"
+                      - !Ref s3
+                      - "/*"
+                - Fn::Join:
+                    - ""
+                    -
+                      - "arn:aws:s3:::"
+                      - !Ref s3
+              Principal: "*"
+              Condition:
+                StringNotEquals:
+                  s3:x-amz-server-side-encryption: AES256
+            -
+              Sid: MustBeEncryptedInTransit
+              Action:
+                - "s3:*"
+              Effect: "Deny"
+              Resource:
+                - Fn::Join:
+                    - ""
+                    -
+                      - "arn:aws:s3:::"
+                      - !Ref s3
+                      - "/*"
+                - Fn::Join:
+                    - ""
+                    -
+                      - "arn:aws:s3:::"
+                      - !Ref s3
+              Principal: "*"
+              Condition:
+                Bool:
+                  aws:SecureTransport: false
+    Bucket:
+      Type: "AWS::S3::Bucket"
+      Properties:
+		PublicAccessBlockConfiguration:
+          BlockPublicAcls : true
+          BlockPublicPolicy : true
+          IgnorePublicAcls : true
+          RestrictPublicBuckets : true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: Department
+          Value: !Ref Department
+        - Key: SystemName
+          Value: !Ref SystemName
+		

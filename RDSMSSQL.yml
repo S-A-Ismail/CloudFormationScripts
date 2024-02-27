@@ -1,0 +1,201 @@
+AWSTemplateFormatVersion: "2010-09-09"
+# Script for Launching MSSQL RDS using Cloud Formation.
+# Modify the values Option Group,DatabaseMonitoringRole,DatabaseOptionGroup
+Description: 'Template for Creating MSSQL Database'
+Parameters:
+  DatabaseInstanceType:
+    Default: db.m5.xlarge
+    AllowedValues:
+      - db.m4.xlarge
+      - db.t2.small
+      - db.m5.xlarge
+      - db.r4.large
+      # Add/Remove from list as required
+    Description: The instance type to use for the database.
+    Type: String
+  DatabaseEngine:
+    Default: sqlserver-ee
+    Description: MSSQL Engine Type
+    AllowedValues:
+      - sqlserver-ee
+    Type: String
+  DatabaseEngineVersion:
+    Default: 14.00.3223.3.v1
+    Description: MSSQL Engine AutoMinorVersion
+    AllowedValues:
+      - 14.00.3049.1.v1
+      - 14.00.3223.3.v1
+      - 13.00.5216.0.v1
+      - 15.00.4043.16.v1
+      - 15.00.4073.23.v1
+      - 15.00.4153.1.v1
+      # Add/Remove from list as required
+    Type: String
+  LicenseModel: 
+    Type: String
+    Default: license-included   
+    Description: MSSQL License Type
+    AllowedValues: 
+      - license-included 
+  DatabasePassword:
+      AllowedPattern: "[a-zA-Z0-9]+"
+      ConstraintDescription: must contain only alphanumeric characters.
+      Description: The database admin account password.
+      MaxLength: '41'
+      MinLength: '8'
+      NoEcho: 'true'
+      Type: String
+  DatabaseUsername:
+      AllowedPattern: "[a-zA-Z0-9]+"
+      ConstraintDescription: must contain only alphanumeric characters, 4-16 characters
+      Description: The database admin account user name.
+      MaxLength: '16'
+      MinLength: '4'
+      Type: String
+  DatabaseBackupRetentionPeriod:
+      Type: String
+      Default: 1
+      AllowedValues:
+          - 1
+          - 7
+          - 14
+          - 35
+      Description: The database backup retention period in days.
+  DatabaseAllocatedStorage:
+      Description: The size of the database (Gb)
+      Type: Number
+      MinValue: '20'
+      MaxValue: '16384'
+      ConstraintDescription: must be between 20 and 16384 GB
+
+  DatabaseSubnets:
+      Description: The subnets to place database instances in.
+      Type: List<AWS::EC2::Subnet::Id>
+      
+  DatabaseMonitoringRole:
+      Description: The Monitoring Role to be assigned for Database.
+      Type: String
+  
+  DatabaseOptionGroup:
+      Description: The Option Group to be assigned for Database.
+      Type: String     
+       
+  DeploymentEmail:
+      Description: Receipient of SNS alarms
+      Type: String
+  
+  DatabaseIdentifier:
+      Description: The name of the MSSQL RDS identifier to be created 
+      Type: String
+    
+  DatabaseVpc:
+    Description: VPC to launch MSSQL Database in
+    Type: AWS::EC2::VPC::Id
+    
+Metadata:
+  AWS::CloudFormation::Interface:
+      ParameterGroups:
+          - Label:
+              default: MSSQL Database Configuration 
+            Parameters:
+              - DatabaseInstanceType
+              - DatabaseIdentifier
+              - DatabaseUsername
+              - DatabasePassword
+              - DatabaseSubnets
+              - DatabaseVpc
+              - DatabaseBackupRetentionPeriod
+              - DeploymentEmail
+              - DatabaseAllocatedStorage
+      ParameterLabels:
+          DatabaseInstanceType:
+              default: Database Instance Type
+          DatabasePassword:
+              default: Database Password
+          DatabaseUsername:
+              default: Database Username
+          DatabaseBackupRetentionPeriod:
+              default: Database Backup Retention Period
+          DatabaseSubnets:
+              default: Database Subnets
+          DatabaseVpc:
+              default: Database VPC ID
+          DeploymentEmail:
+              default: SNS Alarm Recipient
+          DatabaseAllocatedStorate:
+              default: Size of the DB Drive
+          DatabaseIdentifier:
+               default: Database Instance Identifier 
+Conditions:
+  Is14: !Equals [ !Ref DatabaseEngineVersion, '14.00.3223.3.v1' ]
+  Is15: !Equals [ !Ref DatabaseEngineVersion, '15.00.4153.1.v1']
+  
+Resources:
+  DatabaseParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Description: !If [Is15, 'MSSQL 15 Parameter Group', 'MSSQL 14 Parameter Group']
+      Family: !If [Is15, 'sqlserver-ee-15.0', 'sqlserver-ee-14.0']
+      
+  DatabaseSubnetGroup:
+      Type: AWS::RDS::DBSubnetGroup
+      Properties:
+          DBSubnetGroupDescription: CloudFormation managed DB subnet group.
+          SubnetIds: !Ref DatabaseSubnets
+  DatabaseSecurityGroups:
+      Type: AWS::EC2::SecurityGroup
+      Properties:
+         GroupDescription: Security groups to apply to the RDS cluster.
+         SecurityGroupEgress:
+         - CidrIp: 0.0.0.0/0
+           IpProtocol: "-1"
+         SecurityGroupIngress:
+         - CidrIp: 10.0.0.0/8
+           IpProtocol: tcp
+           FromPort: 1433
+           ToPort: 1433
+         - CidrIp: 172.20.0.0/16
+           IpProtocol: tcp
+           FromPort: 1433
+           ToPort: 1433
+         - CidrIp: 192.168.0.0/16
+           IpProtocol: tcp
+           FromPort: 1433
+           ToPort: 1433
+         VpcId: !Ref DatabaseVpc
+         
+  DatabasePrimaryInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllowMajorVersionUpgrade: true
+      AutoMinorVersionUpgrade: true
+      DBInstanceIdentifier: !Ref DatabaseIdentifier
+      MultiAZ: false
+      Timezone: US Eastern Standard Time
+      BackupRetentionPeriod: !Ref DatabaseBackupRetentionPeriod
+      CopyTagsToSnapshot: true
+      DBParameterGroupName: !Ref DatabaseParameterGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups: 
+      - Fn::GetAtt:
+        - DatabaseSecurityGroups
+        - GroupId
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      DBInstanceClass: !Ref DatabaseInstanceType
+      Engine: !Ref DatabaseEngine
+      EngineVersion: !Ref DatabaseEngineVersion
+      LicenseModel: !Ref LicenseModel
+      MasterUsername: !Ref DatabaseUsername
+      MasterUserPassword: !Ref DatabasePassword
+      StorageEncrypted: true
+      PubliclyAccessible: false
+      StorageType: gp2
+      PreferredBackupWindow: 05:00-06:00
+      PreferredMaintenanceWindow: sat:03:00-sat:04:00
+    DeletionPolicy: Snapshot
+
+Outputs:
+  DatabaseServerName:
+    Value: !Sub
+      - "MSSQL:${Address}:${Port}"
+      - { Address: !GetAtt DatabasePrimaryInstance.Endpoint.Address, Port: !GetAtt DatabasePrimaryInstance.Endpoint.Port }

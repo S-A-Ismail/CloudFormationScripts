@@ -1,0 +1,86 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  This Template creates an S3 bucket with security, IAM and KMS Encryption policies defined.
+
+Resources:
+  S3Key:
+    Type: 'AWS::KMS::Key'
+    Properties:
+      KeyPolicy:
+        Version: 2012-10-17
+        Id: key-s3
+        Statement:
+          - Sid: Enable IAM User Permissions
+            Effect: Allow
+            Principal:
+              AWS: !Join 
+                - ''
+                - - 'arn:aws:iam::'
+                  - !Ref 'AWS::AccountId'
+                  - ':root'
+            Action: 'kms:*'
+            Resource: '*'
+  S3KeyAlias:
+    Type: 'AWS::KMS::Alias'
+    Properties:
+      AliasName: alias/{add name}
+      TargetKeyId:
+        Ref: S3Key
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    DeletionPolicy: Delete
+    Properties:
+      BucketName:
+        Ref: s3BucketName
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: 'aws:kms'
+              KMSMasterKeyID: !GetAtt 
+                - S3Key
+                - Arn
+  s3BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      Bucket:
+        Ref: S3Bucket
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Sid: MustBeEncryptedAtRest
+            Action:
+              - 's3:PutObject'
+            Effect: Deny
+            Resource:
+              - 'Fn::Join':
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - !Ref S3Bucket
+                    - /*
+              - 'Fn::Join':
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - !Ref S3Bucket
+            Principal: '*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: MustBeEncryptedInTransit
+            Action:
+              - 's3:*'
+            Effect: Deny
+            Resource:
+              - 'Fn::Join':
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - !Ref S3Bucket
+                    - /*
+              - 'Fn::Join':
+                  - ''
+                  - - 'arn:aws:s3:::'
+                    - !Ref S3Bucket
+            Principal: '*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': false
+

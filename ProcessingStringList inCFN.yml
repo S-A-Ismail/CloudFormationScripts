@@ -1,0 +1,40 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+You can take a list of strings as parameters in an AWS CloudFormation template and add prefixes and suffixes 
+to each item using the AWS::CloudFormation::Init metadata section with the AWS::CloudFormation::Interface key.
+In this example, the template takes a list of strings as a parameter (ListParameter) and defines a mapping (PrefixSuffixMapping)
+that contains the prefix and suffix for each item based on the AWS region. 
+The AWS::CloudFormation::Init resource processes the list and creates a new list
+(processedList) with the prefix and suffix added to each item. 
+The processed list is then stored in a file (/tmp/processed_list.txt)
+Parameters:
+  ListParameter:
+    Type: List<String>
+    Default: ["item1", "item2", "item3"]
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: "List Parameters"
+        Parameters:
+          - ListParameter
+Mappings:
+  PrefixSuffixMapping:
+    "us-east-1":
+      Prefix: "prefix-"
+      Suffix: "-suffix"
+Resources:
+  ProcessedList:
+    Type: "AWS::CloudFormation::Init"
+    Properties:
+      Config:
+        files:
+          /tmp/processed_list.txt:
+            content: |
+              {
+                "processedList": [
+                  { "Fn::Join": ["", [{ "Fn::FindInMap": ["PrefixSuffixMapping", { "Ref": "AWS::Region" }, "Prefix"] }, { "Ref": "item1" }, { "Fn::FindInMap": ["PrefixSuffixMapping", { "Ref": "AWS::Region" }, "Suffix"] }]] },
+                  { "Fn::Join": ["", [{ "Fn::FindInMap": ["PrefixSuffixMapping", { "Ref": "AWS::Region" }, "Prefix"] }, { "Ref": "item2" }, { "Fn::FindInMap": ["PrefixSuffixMapping", { "Ref": "AWS::Region" }, "Suffix"] }]] },
+                  { "Fn::Join": ["", [{ "Fn::FindInMap": ["PrefixSuffixMapping", { "Ref": "AWS::Region" }, "Prefix"] }, { "Ref": "item3" }, { "Fn::FindInMap": ["PrefixSuffixMapping", { "Ref": "AWS::Region" }, "Suffix"] }]] }
+                ]
+              }

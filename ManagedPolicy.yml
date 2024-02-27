@@ -1,0 +1,53 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+"This template creates a managed policy for S3 bucket whitelisting (ReadOnly) in AWS
+To create a role that takes a list of bucket names as input and then adds privileges to those buckets, 
+you can modify the provided template to include a parameter for the bucket names and use the 
+AWS::CloudFormation::Init metadata to dynamically generate the Resource section of the policy document.
+he WhitelistBuckets parameter takes a list of bucket names. The AWS::CloudFormation::Init metadata is not necessary 
+here since we can directly use the Resource section in the policy document to construct the ARNs for each bucket 
+based on the bucket names provided in the WhitelistBuckets parameter."
+Parameters:
+  ManagedPolicyName:
+    Type: "String"
+    Description: "Enter a name for the policy being created"
+  RoleAttachment:
+    Type: "CommaDelimitedList"
+    Description: "Enter a comma delimited list of ROLE NAMES the policy needs to be attached to"
+  WhitelistBuckets:
+    Type: "CommaDelimitedList"
+    Description: "Enter a comma delimited list of BUCKET NAMES the policy needs to whitelist"
+Mappings:
+  PrefixSuffixMapping:
+    "us-east-1":
+      Prefix: "arn:aws:s3:::"
+      Suffix: "/*"
+Resources:
+  ManagedPolicy:
+    Type: "AWS::IAM::ManagedPolicy"
+    Properties:
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: "ConsoleAccess"
+            Effect: "Allow"
+            Action:
+              - "s3:GetBucketLocation"
+              - "s3:ListAllMyBuckets"
+            Resource: "*"
+          - Effect: "Allow"
+            Action:
+              - "s3:List*"
+              - "s3:Get*"
+            Resource: 
+            - !Sub
+              - "${Prefix}${BucketName}${Suffix}"
+              - Prefix: !FindInMap [PrefixSuffixMapping, !Ref "AWS::Region", Prefix]
+                Suffix: !FindInMap [PrefixSuffixMapping, !Ref "AWS::Region", Suffix]
+              - BucketName: !Select [0, !Ref "WhitelistBuckets"]
+            - !Sub
+              - "${Prefix}${BucketName}"
+              - Prefix: !FindInMap [PrefixSuffixMapping, !Ref "AWS::Region", Prefix]
+              - BucketName: !Select [0, !Ref "WhitelistBuckets"]
+      ManagedPolicyName: !Ref "ManagedPolicyName"
+      Roles: !Ref "RoleAttachment"

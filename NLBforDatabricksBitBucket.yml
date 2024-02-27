@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: 
+  Template for creating resources that connect databricks with bitbucket server.
+
+Parameters:
+  TargetInstanceIDs:
+    Type: List<String>
+    Description: Enter the instance IDs of the servers hosting your bitbucket service (Comma seperated)
+  SubnetIDs:
+    Type: List<String>
+    Description: Enter the subnet IDs of the servers hosting your bitbucket service (Comma seperated)
+  VPCID:
+    Type: String
+    Description: Enter the VPC ID hosting the Bitbucket Servers
+
+Resources:
+  DatabricksRepoTargetGroup:
+    Type: 'AWS::ElasticLoadBalancingV2::TargetGroup'
+    Properties:
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+      Name: "databricks-repo-target-group" # OR whatever you want to name the target group
+      Port: 443
+      Protocol: TCP
+      Tags:
+        - Key: <Key1>
+          Value: <Value1>
+        - Key: <Key2>
+          Value: <Value2>
+      Targets:
+        - Id: !Ref TargetInstanceIDs
+      TargetType: instance
+      VpcId: !Ref VPCID
+  DatabricksRepoLoadbalancer:
+    Type: 'AWS::ElasticLoadBalancingV2::LoadBalancer'
+    Properties:
+      IpAddressType: ipv4
+      Name: databricks-repo-loadbalancer # OR whatever you want to name the target group
+      Scheme: internal
+      SubnetMappings:
+        - SubnetId: !Ref SubnetIDs
+      Tags:
+        - Key: <Key1>
+          Value: <Value1>
+        - Key: <Key2>
+          Value: <Value2>
+      Type: network
+  
+  Listener:
+    Type: 'AWS::ElasticLoadBalancingV2::Listener'
+    Properties:
+      DefaultActions:
+        - TargetGroupArn:
+            - !Ref DatabricksRepoTargetGroup
+        - Type: forward    
+      LoadBalancerArn:
+        - !Ref  DatabricksRepoLoadbalancer
+      Port: 443
+      Protocol: TCP
+  
+  ListenerRule1:
+    Type: 'AWS::ElasticLoadBalancingV2::ListenerRule'
+    Properties:
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref  DatabricksRepoTargetGroup
+      ListenerArn: !Ref Listener
+      Priority: 1    
